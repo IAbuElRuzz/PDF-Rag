@@ -1,0 +1,8 @@
+langchain 
+faiss-cpu 
+PyPDF2
+langchain-huggingface
+sentence-transformers
+langchain-community
+langchain-ollama
+ollama
