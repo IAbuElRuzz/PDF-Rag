@@ -2,7 +2,7 @@
 
 **Ask questions over local PDF collections with semantic retrieval and Ollama.**
 
-PDF-Rag extracts PDF text, splits it into overlapping chunks, embeds them with `sentence-transformers/all-MiniLM-L6-v2`, and retrieves context from FAISS before generating an answer with a local `llama3` model.
+PDF-Rag extracts PDF text, splits it into overlapping chunks, embeds them with `sentence-transformers/all-MiniLM-L6-v2`, and retrieves context from an in-memory FAISS index before generating an answer with a local `llama3` model.
 
 This is a terminal prototype. It does not provide OCR, evaluated answer accuracy, a service API, or production deployment guarantees.
 
@@ -51,21 +51,14 @@ flowchart LR
     L --> O[Terminal answer]
 ```
 
-Both scripts use 1,000-character chunks with 200-character overlap, Hugging Face embeddings, FAISS persistence, and LangChain RetrievalQA. The LangChain dependencies are constrained to the 0.3 family to retain the legacy imports used by this prototype; migration to current APIs is separate work. The embedding dependencies also retain a compatible Transformers 4.x and NumPy 1.x stack for older CPU wheels. These are compatibility ranges, not a fully locked dependency graph; this legacy stack still needs ongoing dependency and security maintenance.
+Both scripts use 1,000-character chunks with 200-character overlap, Hugging Face embeddings, an in-memory FAISS index, and LangChain RetrievalQA. Page numbers and filenames are attached as chunk metadata and shown with each answer. The LangChain dependencies are constrained to the 0.3 family to retain the legacy imports used by this prototype; migration to current APIs is separate work. The embedding dependencies also retain a compatible Transformers 4.x and NumPy 1.x stack for older CPU wheels. These are compatibility ranges, not a fully locked dependency graph; this legacy stack still needs ongoing dependency and security maintenance.
 
-## Cache behavior and troubleshooting
+## Index and troubleshooting
 
-The scripts write `documents.pkl` and `faiss_index/` in the working directory. They do not automatically detect changed PDFs or embedding settings. After changing inputs, stop the program and remove **only these generated caches** before rerunning:
-
-```sh
-python -c "from pathlib import Path; import shutil; Path('documents.pkl').unlink(missing_ok=True); shutil.rmtree('faiss_index', ignore_errors=True)"
-```
-
-Only use cache files you generated and trust. Python pickle can execute code during deserialization. Never load downloaded or untrusted cache files, and do not enable FAISS's dangerous-deserialization option as a general troubleshooting workaround.
+The current scripts rebuild the FAISS index in memory at startup. This avoids loading pickle-based document caches or FAISS indexes that require unsafe deserialization, and ensures changed PDFs are reflected on the next run. The tradeoff is that PDF extraction and embedding repeat each time. A future persistent cache should use a safe, versioned format and verify its source files and embedding configuration.
 
 - **`ModuleNotFoundError`:** activate the virtual environment and install the complete requirements file. Both PDF parsers are included.
 - **`langchain.chains` import errors:** use the declared 0.3 compatibility ranges in a fresh Python 3.11/3.12 environment; unconstrained LangChain upgrades can remove legacy APIs.
-- **FAISS refuses cached deserialization:** the current loader does not opt into unsafe deserialization. Remove the generated caches and rebuild; loading saved indexes needs a deliberate trust-boundary redesign.
 - **Connection refused or missing model:** confirm Ollama is running and `ollama list` includes `llama3`.
 - **No extracted text:** scanned/image-only PDFs require OCR, which is not implemented.
 - **Poor answers:** inspect extracted text and retrieved context. An answer is model output, not verified evidence.
@@ -77,10 +70,10 @@ The tracked FAISS binary alone is not a complete reusable cache. Building from t
 ```sh
 python -m pip check
 python -m compileall -q run.py run_pdf_plumber.py
-python -c "import sentence_transformers; import run, run_pdf_plumber; assert run.split_texts(['hello world'])"
+python -c "import sentence_transformers; import pdf_rag, run, run_pdf_plumber; assert pdf_rag.load_documents"
 ```
 
-The import/chunking check does not download model weights or call Ollama. An end-to-end question-answering demonstration requires local models and is not established by these checks.
+The import check does not download model weights or call Ollama. An end-to-end question-answering demonstration requires local models and is not established by this check.
 
 ## License status
 
