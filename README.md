@@ -20,6 +20,8 @@ python -m pip install -r requirements.txt
 python -m pip check
 ollama pull llama3
 python run.py
+# Optional: select a directory, model, or retrieval count
+python run.py --pdf-dir ./pdf_folder --model llama3 --top-k 4
 ```
 
 On Windows, create the environment with `py -3.12 -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1` in PowerShell. If Ollama is not running, start its application or run `ollama serve` in a separate terminal.
@@ -35,7 +37,7 @@ The initial setup requires network access to install packages and download Ollam
 | `python run.py` | PyPDF2 | Terminal question answering |
 | `python run_pdf_plumber.py` | pdfplumber | Displays two semantic-search matches before answering |
 
-The second script's displayed matches come from a separate search; they are not guaranteed to be exactly the documents selected by RetrievalQA. Neither script currently prints page-level answer citations.
+The second script's displayed matches come from a separate search; they are not guaranteed to be exactly the documents selected by RetrievalQA. Both scripts print the answer’s retrieved source filenames and page numbers.
 
 ## Retrieval architecture
 
@@ -51,7 +53,7 @@ flowchart LR
     L --> O[Terminal answer]
 ```
 
-Both scripts use 1,000-character chunks with 200-character overlap, Hugging Face embeddings, an in-memory FAISS index, and LangChain RetrievalQA. Page numbers and filenames are attached as chunk metadata and shown with each answer. The LangChain dependencies are constrained to the 0.3 family to retain the legacy imports used by this prototype; migration to current APIs is separate work. The embedding dependencies also retain a compatible Transformers 4.x and NumPy 1.x stack for older CPU wheels. These are compatibility ranges, not a fully locked dependency graph; this legacy stack still needs ongoing dependency and security maintenance.
+Both scripts accept `--pdf-dir`, `--model`, and `--top-k`. They use 1,000-character chunks with 200-character overlap, Hugging Face embeddings, an in-memory FAISS index, and LangChain RetrievalQA. Page numbers and filenames are attached as chunk metadata and shown with each answer. The LangChain dependencies are constrained to the 0.3 family to retain the legacy imports used by this prototype; migration to current APIs is separate work. The embedding dependencies also retain a compatible Transformers 4.x and NumPy 1.x stack for older CPU wheels. These are compatibility ranges, not a fully locked dependency graph; this legacy stack still needs ongoing dependency and security maintenance.
 
 ## Index and troubleshooting
 
@@ -69,7 +71,9 @@ The tracked FAISS binary alone is not a complete reusable cache. Building from t
 
 ```sh
 python -m pip check
-python -m compileall -q run.py run_pdf_plumber.py
+python -m compileall -q run.py run_pdf_plumber.py pdf_rag.py
+python run.py --help
+python run_pdf_plumber.py --help
 python -c "import sentence_transformers; import pdf_rag, run, run_pdf_plumber; assert pdf_rag.load_documents"
 ```
 
