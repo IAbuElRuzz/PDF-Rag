@@ -1,148 +1,80 @@
-# 📄 PDF RAG Tool with Ollama
+# PDF-Rag
 
-This project is a **Retrieval-Augmented Generation (RAG)** tool that allows you to query your **PDF documents** using a **local Ollama LLM**.  
-It extracts text from PDFs, embeds them with HuggingFace, stores them in a **FAISS vector database**, and answers your questions interactively.
+**Ask questions over local PDF collections with semantic retrieval and Ollama.**
 
-You can choose between two PDF parsers:
+PDF-Rag extracts PDF text, splits it into overlapping chunks, embeds them with `sentence-transformers/all-MiniLM-L6-v2`, and retrieves context from an in-memory FAISS index before generating an answer with a local `llama3` model.
 
-- `main.py` → uses **PyPDF2**
-- `run_pdf_plumber.py` → uses **pdfplumber** (often gives better extraction results)
+This is a terminal prototype. It does not provide OCR, evaluated answer accuracy, a service API, or production deployment guarantees.
 
----
+## Quick start
 
-## ✨ Features
-- Extracts text from PDFs (`PyPDF2` or `pdfplumber`)
-- Splits text into chunks with overlap for context-aware retrieval
-- Stores embeddings in a **FAISS** index
-- Uses HuggingFace `all-MiniLM-L6-v2` for embeddings
-- Runs **local Ollama models** (e.g., `llama3`) for answering queries
-- Interactive Q&A in the terminal
-- Debug mode (`run_pdf_plumber.py`) shows retrieved context
+Use **Python 3.11 or 3.12** and an installed, running [Ollama](https://ollama.com/download) service. Run all commands from the repository root.
 
----
-
-
-
-## ✨ Features
-- Extracts text from PDFs (`PyPDF2` or `pdfplumber`)
-- Splits text into chunks with overlap for context-aware retrieval
-- Stores embeddings in a **FAISS** index
-- Uses HuggingFace `all-MiniLM-L6-v2` for embeddings
-- Runs **local Ollama models** (e.g., `llama3`) for answering queries
-- Interactive Q&A in the terminal
-- Debug mode (`run_pdf_plumber.py`) shows retrieved context
-
----
-
-## 📦 Installation
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/yourusername/pdf-rag-ollama.git
-cd pdf-rag-ollama
-```
-
-### 2. Create a virtual environment
-```bash
-python -m venv .venv
-source .venv/bin/activate   # Linux / macOS
-.venv\Scripts\activate      # Windows
-```
-
-### 3. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Install and run [Ollama](https://ollama.ai)
-Make sure Ollama is installed and running. Pull a model (e.g., `llama3`):
-```bash
+```sh
+git clone https://github.com/IAbuElRuzz/PDF-Rag.git
+cd PDF-Rag
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip check
 ollama pull llama3
+python run.py
 ```
 
----
+On Windows, create the environment with `py -3.12 -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1` in PowerShell. If Ollama is not running, start its application or run `ollama serve` in a separate terminal.
 
-## 📂 Project Structure
-```
-pdf-rag-ollama/
-│── main.py              # PyPDF2-based pipeline
-│── run_pdf_plumber.py   # pdfplumber-based pipeline
-│── requirements.txt     # Python dependencies
-│── pdf_folder/          # Put your PDFs here
-│── documents.pkl        # Cached documents (auto-generated)
-│── faiss_index/         # FAISS index (auto-generated)
-```
+Place text-based PDFs in `pdf_folder/` before starting. The repository includes a sample PDF. Type a question at the terminal prompt; use `exit` or `quit` to stop.
 
----
+The initial setup requires network access to install packages and download Ollama and embedding models. Once downloaded, inference uses the local Ollama service; model installation is not an offline operation.
 
-## ▶️ Usage
+### Choose an extraction pipeline
 
-### 1. Add PDFs
-Place your files inside the `pdf_folder/` directory.
+| Entry point | Extraction | Additional behavior |
+| --- | --- | --- |
+| `python run.py` | PyPDF2 | Terminal question answering |
+| `python run_pdf_plumber.py` | pdfplumber | Displays two semantic-search matches before answering |
 
-### 2. Run the tool
-**Using PyPDF2:**
-```bash
-python main.py
-```
+The second script's displayed matches come from a separate search; they are not guaranteed to be exactly the documents selected by RetrievalQA. Neither script currently prints page-level answer citations.
 
-**Using pdfplumber (recommended):**
-```bash
-python run_pdf_plumber.py
+## Retrieval architecture
+
+```mermaid
+flowchart LR
+    A[PDF folder] --> B[Extract text]
+    B --> C[Overlapping chunks]
+    C --> D[MiniLM embeddings]
+    D --> E[FAISS index]
+    Q[Question] --> R[Retrieve context]
+    E --> R
+    R --> L[Ollama llama3]
+    L --> O[Terminal answer]
 ```
 
-### 3. Ask questions
-Type your query in the terminal:
-```
-Your question: What are the key findings of the report?
+Both scripts use 1,000-character chunks with 200-character overlap, Hugging Face embeddings, an in-memory FAISS index, and LangChain RetrievalQA. Page numbers and filenames are attached as chunk metadata and shown with each answer. The LangChain dependencies are constrained to the 0.3 family to retain the legacy imports used by this prototype; migration to current APIs is separate work. The embedding dependencies also retain a compatible Transformers 4.x and NumPy 1.x stack for older CPU wheels. These are compatibility ranges, not a fully locked dependency graph; this legacy stack still needs ongoing dependency and security maintenance.
 
-Answer:
- The report highlights...
-```
+## Index and troubleshooting
 
-Type `exit` or `quit` to stop.
+The current scripts rebuild the FAISS index in memory at startup. This avoids loading pickle-based document caches or FAISS indexes that require unsafe deserialization, and ensures changed PDFs are reflected on the next run. The tradeoff is that PDF extraction and embedding repeat each time. A future persistent cache should use a safe, versioned format and verify its source files and embedding configuration.
 
----
+- **`ModuleNotFoundError`:** activate the virtual environment and install the complete requirements file. Both PDF parsers are included.
+- **`langchain.chains` import errors:** use the declared 0.3 compatibility ranges in a fresh Python 3.11/3.12 environment; unconstrained LangChain upgrades can remove legacy APIs.
+- **Connection refused or missing model:** confirm Ollama is running and `ollama list` includes `llama3`.
+- **No extracted text:** scanned/image-only PDFs require OCR, which is not implemented.
+- **Poor answers:** inspect extracted text and retrieved context. An answer is model output, not verified evidence.
 
-## 🛠 Debugging (Optional)
-When using `run_pdf_plumber.py`, the script will also show the **top retrieved context** before answering:
-```
-🔎 Top matching context:
+The tracked FAISS binary alone is not a complete reusable cache. Building from the PDFs is the supported first-run workflow.
 
-Match 1:
-"The financial results for 2023 show a 12% increase..."
+## Development checks
 
-🤖 Answer:
-The report concludes that revenue growth was driven by...
+```sh
+python -m pip check
+python -m compileall -q run.py run_pdf_plumber.py
+python -c "import sentence_transformers; import pdf_rag, run, run_pdf_plumber; assert pdf_rag.load_documents"
 ```
 
----
+The import check does not download model weights or call Ollama. An end-to-end question-answering demonstration requires local models and is not established by this check.
 
-## ⚡ Requirements
-- Python 3.9+
-- [Ollama](https://ollama.ai) installed & running
-- Dependencies:
-  ```
-  PyPDF2
-  pdfplumber
-  langchain
-  langchain-community
-  langchain-huggingface
-  langchain-ollama
-  faiss-cpu
-  sentence-transformers
-  ```
+## License status
 
----
-
-## 📌 Notes
-- Cached files:  
-  - `documents.pkl` → serialized documents  
-  - `faiss_index/` → FAISS index for retrieval  
-- If you add new PDFs, **delete both files** to force reindexing.
-- Use `run_pdf_plumber.py` for better extraction on complex PDFs.
-
----
-
-## 📜 License
-MIT License. Free to use and modify.
+The original README stated MIT, but this repository currently has no standalone LICENSE file. An explicit license file and copyright statement should be added by the owner to clarify reuse terms.
